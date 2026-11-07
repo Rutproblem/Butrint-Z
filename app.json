@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Biblioteka Online",
+    "slug": "biblioteka-online",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#f4f3ec"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f4f3ec"
+      }
+    }
+  }
+}
