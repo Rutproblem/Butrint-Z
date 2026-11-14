@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,8 +15,9 @@ import {
   View,
 } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { addBook, createOrder, deleteBook, getBooks, updateBook } from './src/services/booksApi';
+import { createOrder, getBooks } from './src/services/booksApi';
 import { API_BASE_URL, isApiConfigured } from './src/services/apiConfig';
+import DeveloperConsole from './src/DeveloperConsole';
 
 const categories = ['Të gjithë', 'Roman', 'Shkencë', 'Fëmijë', 'Histori'];
 
@@ -30,9 +31,9 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Të gjithë');
   const [selectedBook, setSelectedBook] = useState(null);
-  const [formBook, setFormBook] = useState(null);
   const [checkoutBook, setCheckoutBook] = useState(null);
   const [notice, setNotice] = useState('');
+  const [developerOpen, setDeveloperOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -59,41 +60,6 @@ export default function App() {
     });
   }, [books, category, query]);
 
-  const saveBook = async (values) => {
-    try {
-      const savedBook = values.id
-        ? await updateBook(values.id, values)
-        : await addBook(values);
-      setBooks((current) => values.id
-        ? current.map((book) => (book.id === savedBook.id ? savedBook : book))
-        : [savedBook, ...current]);
-      setFormBook(null);
-      showNotice(values.id ? 'Libri u përditësua.' : 'Libri u shtua në katalog.');
-    } catch (error) {
-      Alert.alert('Libri nuk u ruajt', error.message);
-    }
-  };
-
-  const removeBook = (book) => {
-    Alert.alert('Fshi librin?', `“${book.title}” do të hiqet nga katalogu.`, [
-      { text: 'Anulo', style: 'cancel' },
-      {
-        text: 'Fshi',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteBook(book.id);
-            setBooks((current) => current.filter((item) => item.id !== book.id));
-            if (selectedBook?.id === book.id) setSelectedBook(null);
-            showNotice('Libri u fshi.');
-          } catch (error) {
-            Alert.alert('Libri nuk u fshi', error.message);
-          }
-        },
-      },
-    ]);
-  };
-
   const startPurchase = (book) => {
     setSelectedBook(null);
     setCheckoutBook(book);
@@ -114,6 +80,17 @@ export default function App() {
     setTimeout(() => setNotice(''), 2600);
   };
 
+  if (developerOpen) {
+    return (
+      <DeveloperConsole
+        onClose={() => {
+          setDeveloperOpen(false);
+          setReloadKey((current) => current + 1);
+        }}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ExpoStatusBar style="dark" />
@@ -126,12 +103,12 @@ export default function App() {
             <Text style={styles.brandSub}>ONLINE · KATALOGU</Text>
           </View>
           <Pressable
-            disabled={loading || !!loadError}
-            style={[styles.addButton, (loading || loadError) && styles.addButtonDisabled]}
-            onPress={() => setFormBook({})}
-            accessibilityLabel="Shto libër"
+            style={styles.developerButton}
+            onPress={() => setDeveloperOpen(true)}
+            accessibilityLabel="Hap panelin e zhvilluesit"
           >
-            <Text style={styles.addButtonText}>＋</Text>
+            <Text style={styles.developerButtonIcon}>⚙</Text>
+            <Text style={styles.developerButtonLabel}>Zhvillues</Text>
           </Pressable>
         </View>
 
@@ -204,8 +181,6 @@ export default function App() {
                 key={book.id}
                 book={book}
                 onOpen={() => setSelectedBook(book)}
-                onEdit={() => setFormBook(book)}
-                onDelete={() => removeBook(book)}
               />
             ))}
           </View>
@@ -223,11 +198,6 @@ export default function App() {
         book={selectedBook}
         onClose={() => setSelectedBook(null)}
         onBuy={startPurchase}
-      />
-      <BookFormModal
-        book={formBook}
-        onClose={() => setFormBook(null)}
-        onSave={saveBook}
       />
       <CheckoutModal
         book={checkoutBook}
@@ -250,7 +220,7 @@ const COLORS = {
   line: '#e5e4dc',
 };
 
-function BookRow({ book, onOpen, onEdit, onDelete }) {
+function BookRow({ book, onOpen }) {
   return (
     <View style={styles.bookRow}>
       <Pressable onPress={onOpen} style={styles.bookMain}>
@@ -267,15 +237,6 @@ function BookRow({ book, onOpen, onEdit, onDelete }) {
         </View>
         <Text style={styles.openArrow}>›</Text>
       </Pressable>
-      <View style={styles.rowActions}>
-        <Pressable onPress={onEdit} style={styles.rowAction} accessibilityLabel={`Edito ${book.title}`}>
-          <Text style={styles.rowActionText}>✎  Edito</Text>
-        </Pressable>
-        <View style={styles.actionDivider} />
-        <Pressable onPress={onDelete} style={styles.rowAction} accessibilityLabel={`Fshi ${book.title}`}>
-          <Text style={[styles.rowActionText, styles.deleteText]}>Fshi  ×</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -283,12 +244,18 @@ function BookRow({ book, onOpen, onEdit, onDelete }) {
 function BookCover({ book, compact = false }) {
   return (
     <View style={[styles.cover, { backgroundColor: book.coverColor }, compact && styles.coverCompact]}>
-      <View style={styles.coverLine} />
-      <View style={styles.coverTextWrap}>
-        <Text style={[styles.coverTitle, compact && styles.coverTitleCompact]} numberOfLines={3}>{book.title}</Text>
-        {!compact && <Text style={styles.coverAuthor}>{book.author}</Text>}
-      </View>
-      <View style={styles.coverSeal}><Text style={styles.coverSealText}>B</Text></View>
+      {book.imageUrl ? (
+        <Image source={{ uri: book.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel={`Kopertina: ${book.title}`} />
+      ) : (
+        <>
+          <View style={styles.coverLine} />
+          <View style={styles.coverTextWrap}>
+            <Text style={[styles.coverTitle, compact && styles.coverTitleCompact]} numberOfLines={3}>{book.title}</Text>
+            {!compact && <Text style={styles.coverAuthor}>{book.author}</Text>}
+          </View>
+          <View style={styles.coverSeal}><Text style={styles.coverSealText}>B</Text></View>
+        </>
+      )}
     </View>
   );
 }
@@ -324,96 +291,6 @@ function BookDetailsModal({ book, onClose, onBuy }) {
           <Text style={styles.demoNote}>Zgjidh sasinë dhe plotëso të dhënat e porosisë në hapin tjetër.</Text>
         </View>
       </View>
-    </Modal>
-  );
-}
-
-function BookFormModal({ book, onClose, onSave }) {
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [category, setCategory] = useState('Roman');
-  const [price, setPrice] = useState('');
-  const [stock, setStock] = useState('');
-  const [description, setDescription] = useState('');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (book) {
-      setTitle(book.title || '');
-      setAuthor(book.author || '');
-      setCategory(book.category || 'Roman');
-      setPrice(book.price === undefined ? '' : String(book.price));
-      setStock(book.stock === undefined ? '' : String(book.stock));
-      setDescription(book.description || '');
-      setError('');
-    }
-  }, [book]);
-
-  const submit = () => {
-    if (!title.trim() || !author.trim() || !price.trim() || !stock.trim()
-      || !Number.isFinite(Number(price)) || Number(price) <= 0
-      || !Number.isInteger(Number(stock)) || Number(stock) < 0) {
-      setError('Plotëso titullin, autorin, çmimin dhe stokun saktë.');
-      return;
-    }
-    onSave({
-      ...(book?.id ? { id: book.id } : {}),
-      title: title.trim(),
-      author: author.trim(),
-      category,
-      price: Number(price),
-      stock: Number(stock),
-      description: description.trim(),
-    });
-  };
-
-  return (
-    <Modal visible={!!book} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.formSheet}>
-          <View style={styles.sheetHandle} />
-          <View style={styles.formHeadingRow}>
-            <View>
-              <Text style={styles.eyebrow}>{book?.id ? 'PËRDITËSO KATALOGUN' : 'ZGJERO KATALOGUN'}</Text>
-              <Text style={styles.formTitle}>{book?.id ? 'Edito librin' : 'Shto libër'}</Text>
-            </View>
-            <Pressable onPress={onClose} style={styles.closeButton} accessibilityLabel="Mbyll">
-              <Text style={styles.closeButtonText}>×</Text>
-            </Pressable>
-          </View>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <FormField label="TITULLI" value={title} onChangeText={setTitle} placeholder="p.sh. Emri i trëndafilit" />
-            <FormField label="AUTORI" value={author} onChangeText={setAuthor} placeholder="Emri i autorit" />
-            <Text style={styles.fieldLabel}>KATEGORIA</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formCategories}>
-              {categories.slice(1).map((item) => (
-                <Pressable
-                  key={item}
-                  onPress={() => setCategory(item)}
-                  style={[styles.formCategory, category === item && styles.formCategoryActive]}
-                >
-                  <Text style={[styles.formCategoryText, category === item && styles.formCategoryTextActive]}>{item}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-            <View style={styles.numberFields}>
-              <View style={styles.numberField}>
-                <FormField label="ÇMIMI (€)" value={price} onChangeText={setPrice} placeholder="12.50" keyboardType="decimal-pad" />
-              </View>
-              <View style={styles.numberField}>
-                <FormField label="STOKU" value={stock} onChangeText={setStock} placeholder="10" keyboardType="number-pad" />
-              </View>
-            </View>
-            <FormField label="PËRSHKRIMI" value={description} onChangeText={setDescription} placeholder="Pak fjalë për librin..." multiline />
-            {!!error && <Text style={styles.formError}>{error}</Text>}
-            <Pressable onPress={submit} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>{book?.id ? 'Ruaj ndryshimet' : 'Shto në katalog'}</Text>
-              <Text style={styles.buyButtonArrow}>→</Text>
-            </Pressable>
-            <View style={styles.formBottomSpace} />
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -592,9 +469,9 @@ const styles = StyleSheet.create({
   brandCopy: { marginLeft: 10, flex: 1 },
   brandName: { color: COLORS.ink, fontSize: 11, fontWeight: '800' },
   brandSub: { color: COLORS.muted, fontSize: 9, marginTop: 3 },
-  addButton: { width: 42, height: 42, backgroundColor: COLORS.green, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
-  addButtonDisabled: { opacity: 0.4 },
-  addButtonText: { color: COLORS.white, fontSize: 27, lineHeight: 30, fontWeight: '300' },
+  developerButton: { height: 38, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: COLORS.green, borderRadius: 5 },
+  developerButtonIcon: { color: COLORS.white, fontSize: 18, marginRight: 5 },
+  developerButtonLabel: { color: COLORS.white, fontSize: 9, fontWeight: '700' },
   intro: { paddingTop: 31, paddingBottom: 20 },
   eyebrow: { fontSize: 9, color: COLORS.coral, fontWeight: '800' },
   heading: { marginTop: 8, color: COLORS.ink, fontSize: 33, lineHeight: 38, fontFamily: 'Georgia' },
@@ -645,11 +522,6 @@ const styles = StyleSheet.create({
   stockText: { color: COLORS.muted, fontSize: 9 },
   lowStock: { color: COLORS.coral },
   openArrow: { color: COLORS.green, fontSize: 24, paddingLeft: 3 },
-  rowActions: { height: 34, borderTopWidth: 1, borderTopColor: COLORS.line, marginTop: 10, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-end' },
-  rowAction: { paddingHorizontal: 8, paddingVertical: 4 },
-  rowActionText: { color: COLORS.green, fontSize: 10, fontWeight: '700' },
-  deleteText: { color: COLORS.coral },
-  actionDivider: { height: 14, width: 1, backgroundColor: COLORS.line },
   footer: { paddingTop: 29, alignItems: 'center' },
   footerRule: { height: 1, backgroundColor: COLORS.line, width: '100%', marginBottom: 13 },
   footerText: { fontSize: 8, color: COLORS.muted },
@@ -668,26 +540,13 @@ const styles = StyleSheet.create({
   buyButtonText: { color: COLORS.white, fontWeight: '700', fontSize: 13 },
   buyButtonArrow: { color: COLORS.white, fontSize: 20 },
   demoNote: { color: COLORS.muted, textAlign: 'center', fontSize: 9, marginTop: 9 },
-  formSheet: { maxHeight: '92%', backgroundColor: COLORS.paper, paddingHorizontal: 22, paddingTop: 11, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
-  formHeadingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  formTitle: { color: COLORS.ink, fontFamily: 'Georgia', fontSize: 25, marginTop: 4 },
-  closeButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderRadius: 18 },
-  closeButtonText: { color: COLORS.ink, fontSize: 23, lineHeight: 25 },
   formField: { marginBottom: 13 },
   fieldLabel: { fontSize: 8, color: COLORS.muted, fontWeight: '800', marginBottom: 6 },
   fieldInput: { backgroundColor: COLORS.white, minHeight: 43, borderWidth: 1, borderColor: COLORS.line, borderRadius: 4, paddingHorizontal: 11, color: COLORS.ink, fontSize: 13 },
   multilineInput: { minHeight: 74, paddingTop: 10 },
-  formCategories: { gap: 6, paddingBottom: 14 },
-  formCategory: { borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 15 },
-  formCategoryActive: { backgroundColor: COLORS.green, borderColor: COLORS.green },
-  formCategoryText: { color: COLORS.muted, fontSize: 10 },
-  formCategoryTextActive: { color: COLORS.white },
-  numberFields: { flexDirection: 'row', gap: 11 },
-  numberField: { flex: 1 },
   formError: { color: COLORS.coral, fontSize: 11, marginBottom: 10 },
   saveButton: { height: 47, backgroundColor: COLORS.green, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 5, marginTop: 3 },
   saveButtonText: { color: COLORS.white, fontWeight: '700', fontSize: 12 },
-  formBottomSpace: { height: 24 },
   checkoutPage: { flex: 1, backgroundColor: COLORS.paper },
   checkoutHeader: { minHeight: 65, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: COLORS.line, flexDirection: 'row', alignItems: 'center' },
   checkoutBack: { width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },

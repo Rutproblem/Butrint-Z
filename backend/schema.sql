@@ -18,6 +18,13 @@ CREATE TABLE IF NOT EXISTS books (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS book_images (
+  book_id INT UNSIGNED NOT NULL,
+  image_path VARCHAR(255) NOT NULL,
+  PRIMARY KEY (book_id),
+  CONSTRAINT fk_book_images_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS orders (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   customer_name VARCHAR(140) NOT NULL,
@@ -41,6 +48,26 @@ CREATE TABLE IF NOT EXISTS order_items (
   PRIMARY KEY (id),
   CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id),
   CONSTRAINT fk_order_items_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS developers (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username VARCHAR(80) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_developers_username (username)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS developer_tokens (
+  token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  developer_id INT UNSIGNED NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (token_hash),
+  KEY idx_developer_tokens_expires_at (expires_at),
+  CONSTRAINT fk_developer_tokens_developer
+    FOREIGN KEY (developer_id) REFERENCES developers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 INSERT INTO books (title, author, category, price, stock, description, cover_color)

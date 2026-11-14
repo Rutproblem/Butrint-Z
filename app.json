@@ -11,6 +11,14 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lejo Biblioteka Online të zgjedhë një imazh për kopertinën e librit."
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true
     },
